@@ -8,8 +8,8 @@ steps:
   - run: toolcall-linter {output}/tape.jsonl --tools {input}/tools.json --format sarif -o {output}/lint.sarif
   - run: transcript-to-test {output}/tape.jsonl -o {output}/test_regression.py
   - assert:
-      file: {output}/audit.json
+      file: "{output}/audit.json"
       jq: '.total_cost <= 2.00'
   - assert:
-      file: {output}/lint.sarif
+      file: "{output}/lint.sarif"
       jq: '.runs[0].results | length == 0'

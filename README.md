@@ -49,7 +49,7 @@ What doesn't exist, as far as we've found, is the *set*: ten tools built against
 |------|--------------|---------|
 | [agent-circuit-breaker](https://github.com/Victorchatter/agent-circuit-breaker) | Hard-cap model spend per-run/per-day + kill switch | `pipx install localab-circuit-breaker` |
 | [toolcall-cache](https://github.com/Victorchatter/toolcall-cache) | Content-addressed cache for MCP tool results | `pipx install toolcall-cache` |
-| [agent-checkpoint](https://github.com/Victorchatter/agent-checkpoint) | Save/resume an agent run via a canonical JSONL tape | `pipx install localab-checkpoint` |
+| [agent-checkpoint](https://github.com/Victorchatter/agent-checkpoint) | Save/resume an agent run via a canonical JSONL tape | `pipx install agent-checkpoint` |
 
 ### Interop & portability
 
@@ -104,7 +104,7 @@ pipx install localab-vcr \
          transcript-to-test \
          localab-circuit-breaker \
          toolcall-cache \
-         localab-checkpoint \
+         agent-checkpoint \
          transcript-bridge \
          mcp-openai-bridge \
          prompt-portability-linter

@@ -22,6 +22,9 @@ def _now_compact() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
+_PLACEHOLDER_RE = re.compile(r"\{([A-Za-z0-9_]+)\}")
+
+
 def _expand_placeholders(text: str, ctx: dict[str, str]) -> str:
     """Replace {input}, {output}, {timestamp} and any other ctx keys."""
     def repl(match: re.Match) -> str:
@@ -29,7 +32,12 @@ def _expand_placeholders(text: str, ctx: dict[str, str]) -> str:
         if key in ctx:
             return ctx[key]
         return match.group(0)
-    return re.sub(r"\{([A-Za-z0-9_]+)\}", repl, text)
+    return _PLACEHOLDER_RE.sub(repl, text)
+
+
+def _unresolved_placeholders(text: str) -> list[str]:
+    """Return placeholder names still present after expansion, e.g. {agent_cmd}."""
+    return _PLACEHOLDER_RE.findall(text)
 
 
 def _load_recipe(path: str) -> dict[str, Any]:
@@ -164,6 +172,9 @@ def run(recipe_path: str, *, dry_run: bool = False) -> int:
     output_dir = Path(recipe_dir) / f"pipeline-output-{timestamp}"
     input_dir = recipe_dir
 
+    if not dry_run:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
     ctx: dict[str, str] = {
         "input": input_dir,
         "output": str(output_dir),
@@ -187,14 +198,29 @@ def run(recipe_path: str, *, dry_run: bool = False) -> int:
             return 2
 
         if "run" in step:
-            command = _resolve_command(str(step["run"]), ctx, recipe_dir)
+            raw_run = str(step["run"])
+            command = _resolve_command(raw_run, ctx, recipe_dir)
             env = _build_env(global_env, step.get("env"))
             if dry_run:
                 print(f"\n# step {idx} (run)")
                 for k, v in (step.get("env") or {}).items():
                     print(f"# env {k}={shlex.quote(str(v))}")
                 print(" ".join(shlex.quote(t) for t in command))
+                unresolved = _unresolved_placeholders(_expand_placeholders(raw_run, ctx))
+                if unresolved:
+                    names = ", ".join(f"{{{name}}}" for name in unresolved)
+                    print(f"# WARNING: unresolved placeholder(s) {names} — this step would fail on a real run")
                 continue
+            unresolved = _unresolved_placeholders(_expand_placeholders(raw_run, ctx))
+            if unresolved:
+                names = ", ".join(f"{{{name}}}" for name in unresolved)
+                print(
+                    f"error: step {idx} has unresolved placeholder(s) {names} — "
+                    "define them under the recipe's 'env' or pass them another way; "
+                    "the raw placeholder text would otherwise be run as a literal argument",
+                    file=sys.stderr,
+                )
+                return 2
             print(f"\n[step {idx}] {' '.join(shlex.quote(t) for t in command)}", file=sys.stderr)
             result = subprocess.run(command, env=env)
             if result.returncode != 0:
@@ -208,20 +234,27 @@ def run(recipe_path: str, *, dry_run: bool = False) -> int:
                 return 2
             file_path = assertion.get("file")
             jq_expr = assertion.get("jq")
-            if not file_path or not jq_expr:
-                print(f"error: step {idx} assert needs 'file' and 'jq'", file=sys.stderr)
+            exists_only = assertion.get("exists")
+            if not file_path or (not jq_expr and not exists_only):
+                print(f"error: step {idx} assert needs 'file' plus either 'jq' or 'exists'", file=sys.stderr)
                 return 2
             resolved_file = _resolve_file(file_path, ctx, recipe_dir)
             if dry_run:
                 print(f"\n# step {idx} (assert)")
                 print(f"# file {resolved_file}")
-                print(f"# jq {jq_expr}")
+                print(f"# exists {exists_only}" if exists_only else f"# jq {jq_expr}")
+                continue
+            if exists_only:
+                if not os.path.exists(resolved_file):
+                    print(f"ASSERTION FAILED: step {idx} ({resolved_file} does not exist)", file=sys.stderr)
+                    return 1
+                print(f"[step {idx}] assertion passed: {resolved_file} exists", file=sys.stderr)
                 continue
             try:
                 with open(resolved_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-            except (OSError, json.JSONDecodeError) as exc:
-                print(f"error: step {idx} cannot read {resolved_file}: {exc}", file=sys.stderr)
+            except (OSError, ValueError) as exc:
+                print(f"error: step {idx} cannot read {resolved_file} as JSON: {exc}", file=sys.stderr)
                 return 1
             value = _eval_jq(jq_expr, data)
             if value is not True:

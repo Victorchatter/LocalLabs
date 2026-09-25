@@ -7,5 +7,5 @@ steps:
   - run: toolcall-cache hydrate --state-dir {output}/.locallab --tape {input}/tape.jsonl --server-id fs
   - run: agent-vcr replay --tape {input}/tape.jsonl -- {agent_cmd}
   - assert:
-      file: {output}/.locallab/toolcall-cache/cache.db
-      jq: '.'
+      file: "{output}/.locallab/toolcall-cache/cache.db"
+      exists: true
