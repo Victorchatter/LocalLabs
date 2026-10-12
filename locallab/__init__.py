@@ -1,10 +1,13 @@
 """LocalLab umbrella CLI package."""
 
 import json
-import os
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-__version__ = "0.1.0"
+try:
+    __version__ = version("locallab")
+except PackageNotFoundError:
+    __version__ = "0+unknown"
 
 
 _ROOT = Path(__file__).resolve().parent
