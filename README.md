@@ -133,31 +133,101 @@ pipx install locallab
 Available commands:
 
 ```bash
-locallab install-all   # install all 10 tools via pipx (network)
-locallab update        # upgrade every installed LocalLab tool (network)
-locallab versions      # show installed versions (offline)
-locallab doctor        # smoke-test every installed tool (offline)
-locallab pipeline <recipe.yaml>  # run a cross-tool recipe (offline when local)
+locallab install-all [--git]   # install all 10 tools via pipx from PyPI (--git: from GitHub)
+locallab update                # upgrade every installed LocalLab tool (network)
+locallab versions              # installed version per tool, or missing / broken (offline)
+locallab doctor [--strict] [--json]  # smoke-test every installed tool (offline)
+locallab pipeline <recipe|name> [--dry-run] [--var KEY=VAL ...]  # run a cross-tool recipe
+locallab pipeline --list       # list the recipes shipped with locallab
+locallab init [--force]        # scaffold .locallab/ and a GitHub Actions workflow
 ```
 
-Example pipeline recipe (`locallab/recipes/record-audit-lint.yaml`):
+- `install-all` upgrades tools pipx already manages instead of reinstalling them.
+- `doctor` reports each tool as PASS, `SKIP (missing)` (not on PATH) or FAIL
+  (installed but its smoke command failed). It exits 1 when anything is broken;
+  missing tools only fail it with `--strict`. `--json` prints one object:
+  `{"ok": bool, "strict": bool, "tools": [{"name", "package", "status", "detail"}]}`
+  with `status` one of `ok`, `missing`, `broken`.
+- `init` writes `.locallab/tools.json` (`[]`, the tool-schema file
+  `toolcall-linter --tools` reads), `.locallab/recipe.yaml` (a copy of
+  `record-audit-lint`) and `.github/workflows/locallab.yml`. Existing files are
+  skipped unless you pass `--force`.
+
+### Pipeline recipes
+
+The packaged `record-audit-lint` recipe:
 
 ```yaml
 name: record-audit-lint
 steps:
-  - run: agent-vcr record -o tape.jsonl -- {agent_cmd}
-  - run: tokenauditor tape.jsonl --cost --cost-json -o audit.json
-  - run: toolcall-linter tape.jsonl --tools tools.json --format sarif -o lint.sarif
-  - run: transcript-to-test tape.jsonl -o test_regression.py
+  - run: agent-vcr record -o "{output}/tape.jsonl" -- {agent_cmd}
+  - run: tokenauditor "{output}/tape.jsonl" --cost --cost-json -o "{output}/audit.json"
+  - run: toolcall-linter "{output}/tape.jsonl" --tools "{input}/tools.json" --format sarif -o "{output}/lint.sarif"
+  - run: transcript-to-test "{output}/tape.jsonl" -o "{output}/test_regression.py"
   - assert:
-      file: audit.json
+      file: "{output}/audit.json"
       jq: '.total_cost <= 2.00'
   - assert:
-      file: lint.sarif
+      file: "{output}/lint.sarif"
       jq: '.runs[0].results | length == 0'
 ```
 
-Run with `--dry-run` to preview commands without executing them. See `locallab/recipes/` for more examples.
+Packaged recipes run by name; any other recipe by path:
+
+```bash
+locallab pipeline --list
+locallab pipeline record-audit-lint --dry-run --var agent_cmd="python agent.py"
+locallab pipeline ./my-recipe.yaml --var agent_cmd="python agent.py" --var budget=5
+```
+
+**Quote placeholder values in YAML.** A value that starts with `{` is a YAML
+flow mapping, so write `file: "{output}/audit.json"`, not `file: {output}/audit.json`.
+
+**Placeholders.** `{input}` and `{output}` default to the current directory and
+`<cwd>/pipeline-output-<timestamp>`; `{timestamp}` and `{recipe_dir}` (the
+recipe file's directory) are also built in. A recipe can declare defaults in a
+`vars:` mapping (values may use the built-ins), and `--var KEY=VAL` overrides
+anything. Every step is resolved before the first one runs: a placeholder with
+no value stops the pipeline with exit 2 and names the `--var` to pass.
+`{output}` is created just before the first real step; `--dry-run` never
+creates it.
+
+```yaml
+vars:
+  agent_cmd: python agent.py
+  schemas: "{recipe_dir}/tools.json"
+```
+
+**Steps run without a shell.** Each `run` is split like a shell command line
+and executed directly, so pipes, redirects, `&&` and globbing do nothing. Wrap
+them explicitly: `run: sh -c 'agent-vcr record -o tape.jsonl -- my-agent | tee log.txt'`.
+Run tokens starting with `./` or `../` resolve against the recipe directory;
+use `{recipe_dir}` for anything else.
+
+**Assertions.** An `assert` step is either `{exists: path}` (passes when the
+path exists) or `{file: path, jq: expr}` (loads the JSON file, passes only when
+the expression evaluates to exactly `true`). Relative paths resolve against the
+recipe directory. Failed assertions exit 1. The built-in jq subset (no `jq`
+binary needed, same result on every machine):
+
+| Syntax | Meaning |
+|---|---|
+| `.`, `.foo`, `.foo.bar`, `.[0]`, `.foo[-1].bar` | paths; missing keys and out-of-range indexes give `null` |
+| `"str"`, `1.5`, `true`, `false`, `null` | literals |
+| `==` `!=` `<` `<=` `>` `>=` | comparisons (non-associative) |
+| `and`, `or`, `not`, `//` | jq truthiness: only `false` and `null` are falsy; `.x \| not`; `a // b` is `b` when `a` is falsy |
+| `length` | of string, array, object (size), number (absolute value), `null` (0) |
+| `\|`, `( )` | pipe and grouping |
+
+**Step options** (on `run` and `assert` steps):
+
+```yaml
+  - run: toolcall-linter "{output}/tape.jsonl" --tools "{input}/tools.json"
+    if: "{lint}"              # e.g. --var lint=0; skipped when "", 0, false, no or off
+    continue-on-error: true   # a failure warns and the pipeline carries on
+    env:
+      LOG_LEVEL: debug
+```
 
 **Network requirements:** `install-all` and `update` require network access; `versions`, `doctor`, and `pipeline` are offline when using local recipes and installed tools.
 
