@@ -49,7 +49,8 @@
 - Step options `if:` and `continue-on-error:`.
 - jq subset: `|`, `//`, `and`, `or`, `not`, `length`, parentheses, negative
   indexes, string/number/boolean/null literals.
-- `locallab install-all --git` to install from the GitHub repos.
+- `locallab install-all --git` to install from the GitHub repos (already-installed
+  tools are reinstalled from GitHub with `pipx install --force`).
 - `locallab doctor --strict` and `--json`.
 - `locallab init [--force]`: scaffolds `.locallab/tools.json`,
   `.locallab/recipe.yaml` and `.github/workflows/locallab.yml`.

@@ -1,7 +1,8 @@
 """Self-check for the locallab umbrella CLI.
 
 Tests `locallab versions` and `locallab doctor` offline by creating fake
-installed tools on a temporary PATH and pointing the CLI at them.\n"""
+installed tools on a temporary PATH and pointing the CLI at them.
+"""
 
 from __future__ import annotations
 

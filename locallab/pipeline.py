@@ -73,8 +73,8 @@ _JQ_TOKEN = re.compile(
     re.VERBOSE,
 )
 _CMP_OPS = {
-    "==": lambda a, b: a == b,
-    "!=": lambda a, b: a != b,
+    "==": lambda a, b: _jq_key(a) == _jq_key(b),
+    "!=": lambda a, b: _jq_key(a) != _jq_key(b),
     "<": lambda a, b: a < b,
     "<=": lambda a, b: a <= b,
     ">": lambda a, b: a > b,
@@ -122,6 +122,15 @@ def _jq_type(value: Any) -> str:
     return "array" if isinstance(value, list) else "object"
 
 
+def _jq_key(value: Any) -> Any:
+    """Type-tag a value (recursively) so equality never treats booleans as 0/1."""
+    if isinstance(value, list):
+        return ("array", [_jq_key(v) for v in value])
+    if isinstance(value, dict):
+        return ("object", {k: _jq_key(v) for k, v in value.items()})
+    return (_jq_type(value), value)
+
+
 def _jq_truthy(value: Any) -> bool:
     return value is not None and value is not False
 
@@ -154,9 +163,9 @@ def _jq_length(value: Any) -> Any:
 
 
 def _jq_compare(op: str, left: Callable, right: Callable) -> Callable:
-    # ponytail: Python equality, so `true == 1` is true (jq says false) and
-    # null/mixed-type ordering raises instead of using jq's total order;
-    # upgrade path: compare (type rank, value) tuples when a recipe needs it.
+    # ponytail: ordering (< <= > >=) between mixed types (e.g. null < 1) raises
+    # instead of using jq's total type order; upgrade path: compare
+    # (type rank, value) tuples when a recipe needs it.
     def fn(data: Any) -> Any:
         try:
             return _CMP_OPS[op](left(data), right(data))

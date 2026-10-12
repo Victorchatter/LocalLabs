@@ -45,10 +45,22 @@ DATA = {
         (".runs[0].results | length == 0", True),
         (". | length", len(DATA)),
         ("null", None),
+        ("false == 0", False),
+        ("true == 1", False),
+        ("false != 0", True),
+        ("1 == 1.0", True),
+        (".f == 0", False),
+        (".n == false", False),
+        (".a == .a", True),
     ],
 )
 def test_eval(expr, expected):
     assert _eval_jq(expr, DATA) == expected
+
+
+def test_nested_equality_keeps_booleans_apart():
+    assert _eval_jq(".x == .y", {"x": [False, {"k": True}], "y": [0, {"k": 1}]}) is False
+    assert _eval_jq(".x == .y", {"x": [1, {"k": True}], "y": [1.0, {"k": True}]}) is True
 
 
 def test_identity_returns_input():

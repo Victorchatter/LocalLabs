@@ -81,15 +81,17 @@ def cmd_install_all(args: argparse.Namespace) -> int:
     failures = []
     for name, meta in tools.items():
         pkg = meta["package"]
+        spec = f"git+https://github.com/Victorchatter/{meta['repo']}.git" if args.git else pkg
         if pkg in installed:
-            print(f"\n[{name}] pipx upgrade {pkg}")
-            result = _pipx_run(["upgrade", pkg])
+            # `pipx upgrade` would pull from PyPI; --git reinstalls from the repo.
+            argv = ["install", "--force", spec] if args.git else ["upgrade", pkg]
+            print(f"\n[{name}] pipx {' '.join(argv)}")
+            result = _pipx_run(argv)
             output = (result.stdout + result.stderr).lower()
             if result.returncode == 0 or "already at latest" in output:
                 print("  already installed, upgraded")
                 continue
         else:
-            spec = f"git+https://github.com/Victorchatter/{meta['repo']}.git" if args.git else pkg
             print(f"\n[{name}] pipx install {spec}")
             result = _pipx_run(["install", spec])
             output = (result.stdout + result.stderr).lower()

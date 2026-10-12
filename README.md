@@ -142,7 +142,8 @@ locallab pipeline --list       # list the recipes shipped with locallab
 locallab init [--force]        # scaffold .locallab/ and a GitHub Actions workflow
 ```
 
-- `install-all` upgrades tools pipx already manages instead of reinstalling them.
+- `install-all` upgrades tools pipx already manages (`pipx upgrade`; with `--git`,
+  `pipx install --force` from the GitHub repo) instead of failing on them.
 - `doctor` reports each tool as PASS, `SKIP (missing)` (not on PATH) or FAIL
   (installed but its smoke command failed). It exits 1 when anything is broken;
   missing tools only fail it with `--strict`. `--json` prints one object:

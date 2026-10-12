@@ -143,6 +143,15 @@ def test_install_all_upgrades_already_installed(pipx, capsys):
     assert "already installed, upgraded" in capsys.readouterr().out
 
 
+def test_install_all_git_reinstalls_installed_tool_from_git(pipx, capsys):
+    calls, responses = pipx
+    responses[("list", "--json")] = (0, json.dumps({"venvs": {"localab-vcr": {}}}), "")
+    assert cli.main(["install-all", "--git"]) == 0
+    assert ["install", "--force", "git+https://github.com/Victorchatter/AgentVCR.git"] in calls
+    assert not any(c[0] == "upgrade" for c in calls)
+    assert "already installed, upgraded" in capsys.readouterr().out
+
+
 def test_install_all_bad_pipx_list_json(pipx):
     calls, responses = pipx
     responses[("list", "--json")] = (1, "not json", "")
