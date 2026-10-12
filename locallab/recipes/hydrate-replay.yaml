@@ -1,11 +1,11 @@
 name: hydrate-replay
 # Pre-populate toolcall-cache from a tape so an agent-vcr partial replay can
 # avoid live MCP calls.  Requires: toolcall-cache, agent-vcr.
+# Usage: locallab pipeline hydrate-replay --var agent_cmd="python agent.py"
 env:
   TOOLCALL_CACHE_STATE_DIR: "{output}/.locallab"
 steps:
-  - run: toolcall-cache hydrate --state-dir {output}/.locallab --tape {input}/tape.jsonl --server-id fs
-  - run: agent-vcr replay --tape {input}/tape.jsonl -- {agent_cmd}
+  - run: toolcall-cache hydrate --state-dir "{output}/.locallab" --tape "{input}/tape.jsonl" --server-id fs
+  - run: agent-vcr replay --tape "{input}/tape.jsonl" -- {agent_cmd}
   - assert:
-      file: {output}/.locallab/toolcall-cache/cache.db
-      jq: '.'
+      exists: "{output}/.locallab/toolcall-cache/cache.db"

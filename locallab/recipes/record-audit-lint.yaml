@@ -2,14 +2,15 @@ name: record-audit-lint
 # Record an agent run, audit token cost, lint tool calls, and turn the tape
 # into a regression test.  Requires: agent-vcr, tokenauditor, toolcall-linter,
 # transcript-to-test.
+# Usage: locallab pipeline record-audit-lint --var agent_cmd="python agent.py"
 steps:
-  - run: agent-vcr record -o {output}/tape.jsonl -- {agent_cmd}
-  - run: tokenauditor {output}/tape.jsonl --cost --cost-json -o {output}/audit.json
-  - run: toolcall-linter {output}/tape.jsonl --tools {input}/tools.json --format sarif -o {output}/lint.sarif
-  - run: transcript-to-test {output}/tape.jsonl -o {output}/test_regression.py
+  - run: agent-vcr record -o "{output}/tape.jsonl" -- {agent_cmd}
+  - run: tokenauditor "{output}/tape.jsonl" --cost --cost-json -o "{output}/audit.json"
+  - run: toolcall-linter "{output}/tape.jsonl" --tools "{input}/tools.json" --format sarif -o "{output}/lint.sarif"
+  - run: transcript-to-test "{output}/tape.jsonl" -o "{output}/test_regression.py"
   - assert:
-      file: {output}/audit.json
+      file: "{output}/audit.json"
       jq: '.total_cost <= 2.00'
   - assert:
-      file: {output}/lint.sarif
+      file: "{output}/lint.sarif"
       jq: '.runs[0].results | length == 0'
